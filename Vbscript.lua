@@ -2,12 +2,12 @@
 --Code Tweaked by JelleWho https://github.com/jellewie/Domoticz-Is-the-washing-machine-done
 
 local DEVICES = {
---█Change the below values to EXACTLY match the names/numbers set in Domoticz as device Name/Idx. (SwitchName and MeterName) can either the name '<exact name>' |or| number <Number>
+-- Change the below values to EXACTLY match the names/numbers set in Domoticz as device Name/Idx. (SwitchName and MeterName) can either the name '<exact name>' |or| number <Number>
 --Random    ,SwitchName  ,  MeterName        , TimeOut, StandbyMaxWatt
 	['a'] = {'Wasmachine', 'Wasmachine usage', 5      , 4},
 	['b'] = {'Wasdroger' , 'Wasdroger usage' , 5      , 1},
 	--['c'] = {'3D_Printer', '3D_Printer usage', 5      , 12},							--Another example
---█Also add these names to "data = {" in the format of "['SwitchName'] = {history = true, maxMinutes = 10}," !
+-- Also add these names to "data = {" in the format of "['SwitchName'] = {history = true, maxMinutes = 10}," !
 }
 
 local LogDebugging = false																--Set to TRUE to receive more information in the log, this includes most values of each status check
@@ -15,14 +15,14 @@ local LogChecking = true																--Set to TRUE to log what the result of 
 
 return {
 	logging = {
-		--level = domoticz.LOG_INFO, 													--█Uncomment to override the dzVents global logging setting
-		marker = 'POW'
+		--level = domoticz.LOG_INFO, 													-- Uncomment to override the dzVents global logging setting
+		marker = 'Power'
 	},
 	on = {
-		timer = {'every 1 minutes'},													--█Every x, call the 'execute' function with 'devices' variable listed below
+		timer = {'every 1 minutes'},													-- Every x, call the 'execute' function with 'devices' variable listed below
 	},
 	data = {
---█use exact SwitchName to match DEVICES
+-- use exact SwitchName to match DEVICES
 		['Wasmachine'] = {history = true, maxMinutes = 10},								--Log the values and store them here, remove all data after 10 min
 		['Wasdroger']  = {history = true, maxMinutes = 10},
 		--['3D_Printer'] = {history = true, maxMinutes = 10},
@@ -33,29 +33,29 @@ return {
 			local SwitchName		= machine[1]										-- name of physical power measuring device
 			local MeterName			= machine[2]										-- name of physical power measuring device
 			local TimeOut			= machine[3]+0										-- amount of time the power consumption needs to be constant
-			local StandbyMaxWatt 	= machine[4]+0										-- threshold for standby 
-			local Meter				= domoticz.devices(MeterName)
+			local StandbyMaxWatt 		= machine[4]+0										-- threshold for standby 
+			local Meter			= domoticz.devices(MeterName)
 			local Switch			= domoticz.devices(SwitchName)
 			local power_average		= domoticz.data[SwitchName].avg()+0					-- the average power consumption in the last 10 minutes
 			--lastUpdate.minutesAgo = the time in minutes the device is unchanged
-			--WhActual = the actual power consumption of the device
+			--actualWatt = the actual power consumption of the device
 
 			if LogDebugging then
 				domoticz.log(' - Switch name='..SwitchName..', Meter name='..MeterName)
-				domoticz.log(' - Usage='..Meter.WhActual..', Treshold='..StandbyMaxWatt..', Average='..power_average)
+				domoticz.log(' - Usage='..Meter.actualWatt..', Treshold='..StandbyMaxWatt..', Average='..power_average)
 				domoticz.log(' - Last read='..Meter.lastUpdate.minutesAgo..', Timout after='..TimeOut..', Last switch update='..Switch.lastUpdate.minutesAgo)
 			end
 
-			domoticz.data[SwitchName].add(Meter.WhActual)
+			domoticz.data[SwitchName].add(Meter.actualWatt)
 			if (Switch.active) then
-				if Meter.WhActual > StandbyMaxWatt then									--Device is already on
+				if Meter.actualWatt > StandbyMaxWatt then									--Device is already on
 					return('Already on')
 				end
 				local Reason = ""
-				if (Switch.lastUpdate.minutesAgo > TimeOut) then						--If the button has not changed for more than x minutes
-					if (Meter.WhActual == 0) then
+			if (Switch.lastUpdate.minutesAgo > TimeOut) then									--If the button has not changed for more than x minutes
+					if (Meter.actualWatt == 0) then
 						Reason = "No ActPower"
-					elseif (Meter.WhActual <= StandbyMaxWatt) then
+					elseif (Meter.actualWatt <= StandbyMaxWatt) then
 						if (power_average <= StandbyMaxWatt) then
 						    Reason = "ActPower<Standby & Poweravg<Standby"
 						elseif (Meter.lastUpdate.minutesAgo > TimeOut) then
@@ -63,7 +63,7 @@ return {
 						end
 					end
 					if (Reason ~= "") then
-						Switch.switchOff()												--Device is off or on standby
+						Switch.switchOff()										--Device is off or on standby
 						domoticz.data[SwitchName].reset()								--Reset history
 						return('Off: '..Reason)
 					end
@@ -71,27 +71,27 @@ return {
 
 				if (Switch.lastUpdate.minutesAgo <= TimeOut) then
 					Reason = "Wait for Switch idle:"..tostring(TimeOut-Switch.lastUpdate.minutesAgo).."min"
-				elseif(Meter.WhActual > StandbyMaxWatt) then
+				elseif(Meter.actualWatt > StandbyMaxWatt) then
 					if (power_average > StandbyMaxWatt) then
-						Reason = "Wait for Poweravg<Standby OR TimeOut:"..tostring(Meter.WhActualo).."<"..tostring(StandbyMaxWatt).."W | "..tostring(Meter.lastUpdate.minutesAgo)..">"..tostring(TimeOut).."min"
+						Reason = "Wait for Poweravg<Standby OR TimeOut:"..tostring(Meter.actualWatto).."<"..tostring(StandbyMaxWatt).."W | "..tostring(Meter.lastUpdate.minutesAgo)..">"..tostring(TimeOut).."min"
 					end
 				end
 				return('Idle: '..Reason)
 			end
 			--Note: switch is not active
-			if Meter.WhActual > StandbyMaxWatt and Meter.WhActual < 3840 then			--Device is active (and no reading error above 240V@16A)
-				Switch.switchOn()														--Turn the virtual switch on
-				return('Switching On: Act_Power='..tostring(Meter.WhActual)..'>'..tostring(StandbyMaxWatt))
+			if Meter.actualWatt > StandbyMaxWatt and Meter.actualWatt < 3840 then							--Device is active (and no reading error above 240V@16A)
+				Switch.switchOn()												--Turn the virtual switch on
+				return('Switching On: Act_Power='..tostring(Meter.actualWatt)..'>'..tostring(StandbyMaxWatt))
 			end
 			--Note: switch and machine are not active
-			if power_average > 0 then 													--Switch is off but average is not reset
+			if power_average > 0 then 												--Switch is off but average is not reset
 				domoticz.data[SwitchName].reset()										--Reset history (and the new average of NULL data is ofc 0)
 			end 
-			return('Off')																--Device is off
+			return('Off')														--Device is off
 		end
 
-		for i, machine in pairs(DEVICES) do 											--Loop through all the devices
-			checked = status(machine)													--Check the status of each device
+		for i, machine in pairs(DEVICES) do 												--Loop through all the devices
+			checked = status(machine)												--Check the status of each device
 			if LogChecking then domoticz.log('Status of '..machine[1]..'='..checked) end--Log the status of each device
 		end
 	end
